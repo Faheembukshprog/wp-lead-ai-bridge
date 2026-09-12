@@ -1,0 +1,39 @@
+# WordPress core files (should never be in plugin repo)
+*.zip
+/wp-core/
+/wp-content/uploads/
+/wp-content/upgrade/
+/wp-content/backup-*/
+/wp-content/cache/
+/wp-content/backups/
+
+# Local dev environment
+xampp/
+htdocs/
+.env
+.env.local
+*.local
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs and temp
+*.log
+/wp-content/debug.log
+/tmp/
+
+# Secrets — never commit credentials
+secrets.json
+api-keys.json
+*.pem
+*.key
+credentials*.json
+
+# n8n — keep workflow JSON, but exclude any exported credentials
+n8n-workflow/credentials.json

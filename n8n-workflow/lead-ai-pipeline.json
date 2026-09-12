@@ -1,0 +1,164 @@
+{
+  "name": "Lead AI Bridge - WordPress Lead Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "lead-ai-bridge",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "1a111111-0000-4000-8000-000000000001",
+      "name": "Webhook - Receive Lead",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "lead-ai-bridge"
+    },
+    {
+      "parameters": {
+        "functionCode": "// Validate and clean the incoming lead from the WordPress plugin.\n// Expected body: { source, name, email, message, product_interest, site, submitted_at }\nconst body = items[0].json.body || items[0].json;\n\nconst name = (body.name || '').toString().trim();\nconst email = (body.email || '').toString().trim();\nconst message = (body.message || '').toString().trim();\nconst productInterest = (body.product_interest || '').toString().trim();\nconst source = body.source || 'unknown';\nconst site = body.site || '';\n\nconst emailPattern = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!name || !emailPattern.test(email)) {\n  throw new Error('Invalid lead: missing name or malformed email');\n}\n\nreturn [{\n  json: {\n    name,\n    email,\n    message,\n    productInterest,\n    source,\n    site,\n    receivedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "1a111111-0000-4000-8000-000000000002",
+      "name": "Validate & Clean",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// MOCK classification node — runs with zero API keys so the whole\n// pipeline is testable end-to-end before any LLM credentials exist.\n// Swap this for the disabled 'Classify Lead (OpenAI - optional)' node\n// once you have an API key: connect it in place of this node and\n// enable it (right-click -> Activate Node).\nconst lead = items[0].json;\nconst text = (lead.message + ' ' + lead.productInterest).toLowerCase();\n\nlet urgency = 'normal';\nif (/urgent|asap|today|immediately/.test(text)) urgency = 'high';\n\nlet leadType = 'general_inquiry';\nif (/quote|price|pricing|cost/.test(text)) leadType = 'pricing_request';\nif (/support|issue|problem|broken/.test(text)) leadType = 'support';\nif (/buy|order|purchase/.test(text)) leadType = 'sales_ready';\n\nconst suggestedReply = `Hi ${lead.name}, thanks for reaching out about ${lead.productInterest || 'our services'}. We will get back to you shortly.`;\n\nreturn [{\n  json: {\n    ...lead,\n    leadType,\n    urgency,\n    suggestedReply,\n    classifiedBy: 'mock'\n  }\n}];"
+      },
+      "id": "1a111111-0000-4000-8000-000000000003",
+      "name": "Classify Lead (Mock Mode)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"model\": \"gpt-4o-mini\", \"messages\": [ { \"role\": \"system\", \"content\": \"Classify the lead as JSON with leadType, urgency, suggestedReply.\" }, { \"role\": \"user\", \"content\": $json.message } ] } }}"
+      },
+      "id": "1a111111-0000-4000-8000-000000000004",
+      "name": "Classify Lead (OpenAI - optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 480],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_YOUR_GOOGLE_SHEET_ID_HERE",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{$json.receivedAt}}",
+            "Source": "={{$json.source}}",
+            "Name": "={{$json.name}}",
+            "Email": "={{$json.email}}",
+            "Message": "={{$json.message}}",
+            "Product Interest": "={{$json.productInterest}}",
+            "Lead Type": "={{$json.leadType}}",
+            "Urgency": "={{$json.urgency}}"
+          }
+        }
+      },
+      "id": "1a111111-0000-4000-8000-000000000005",
+      "name": "Append to Google Sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.4,
+      "position": [900, 220]
+    },
+    {
+      "parameters": {
+        "fromEmail": "leads@yourdomain.com",
+        "toEmail": "you@yourdomain.com",
+        "subject": "=New {{$json.urgency}} lead: {{$json.leadType}} — {{$json.name}}",
+        "text": "=New lead from {{$json.site}}\\n\\nName: {{$json.name}}\\nEmail: {{$json.email}}\\nProduct interest: {{$json.productInterest}}\\nMessage: {{$json.message}}\\n\\nAI classification: {{$json.leadType}} / {{$json.urgency}}\\nSuggested reply: {{$json.suggestedReply}}",
+        "options": {}
+      },
+      "id": "1a111111-0000-4000-8000-000000000006",
+      "name": "Send Notification Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [900, 380]
+    },
+    {
+      "parameters": {
+        "chatId": "PASTE_YOUR_TELEGRAM_CHAT_ID_HERE",
+        "text": "=New {{$json.urgency}} lead ({{$json.leadType}}): {{$json.name}} — {{$json.email}}"
+      },
+      "id": "1a111111-0000-4000-8000-000000000007",
+      "name": "Send Telegram Notification (optional)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [900, 540],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "url": "={{$json.site}}/wp-json/lead-ai-bridge/v1/confirm",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"email\": $json.email, \"leadType\": $json.leadType, \"urgency\": $json.urgency } }}"
+      },
+      "id": "1a111111-0000-4000-8000-000000000008",
+      "name": "Confirm Back to WordPress (optional)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "disabled": true
+    }
+  ],
+  "connections": {
+    "Webhook - Receive Lead": {
+      "main": [
+        [ { "node": "Validate & Clean", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Validate & Clean": {
+      "main": [
+        [ { "node": "Classify Lead (Mock Mode)", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Classify Lead (Mock Mode)": {
+      "main": [
+        [
+          { "node": "Append to Google Sheet", "type": "main", "index": 0 },
+          { "node": "Send Notification Email", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Notification Email": {
+      "main": [
+        [ { "node": "Confirm Back to WordPress (optional)", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

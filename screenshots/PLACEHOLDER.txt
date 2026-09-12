@@ -1,0 +1,10 @@
+# Screenshots
+
+Replace these placeholder files with real screenshots from your live demo.
+Recommended size: 1600x900 PNG, optimized with TinyPNG or similar.
+
+- `lead-log.png` — the admin Lead Log table (Lead AI Bridge > Lead Log) showing 3-4 rows with mixed `sent` / `failed` statuses
+- `n8n-workflow.png` — the full n8n canvas with all nodes visible (webhook -> validate -> classify -> sheets + email)
+- `sheet-output.png` — a classified lead landing in the Google Sheet, with Lead Type and Urgency columns populated
+
+Once these are in place, update the README's "Screenshots" section to reference them with relative paths so they render in GitHub's repo preview.
